@@ -8,7 +8,10 @@ format:
 lint:
 	pylint --disable=R,C *.py
 
-# test:
-# 	python -m pytest -vv --cov=hello test_hello.py
+run:
+	python chessMain.py
 
-all: install lint format
+test:
+	python -m pytest -vv --cov=hello test_hello.py
+
+all: install format
