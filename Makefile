@@ -9,7 +9,7 @@ lint:
 	pylint --disable=R,C *.py
 
 run:
-	python chessMain.py
+	python ChessMain.py
 
 test:
 	python -m pytest -vv --cov=hello test_hello.py
