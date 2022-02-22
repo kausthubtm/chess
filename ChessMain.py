@@ -7,6 +7,8 @@ import pygame as p
 import ChessEngine, ChessAI
 import sys
 from multiprocessing import Process, Queue
+import speech_recognition as sr
+import time
 
 BOARD_WIDTH = BOARD_HEIGHT = 512
 MOVE_LOG_PANEL_WIDTH = 250
@@ -16,6 +18,8 @@ SQUARE_SIZE = BOARD_HEIGHT // DIMENSION
 MAX_FPS = 15
 IMAGES = {}
 
+ranks_to_rows = {"1": 7, "2": 6, "3": 5, "4": 4, "5": 3, "6": 2, "7": 1, "8": 0}
+files_to_cols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7}
 
 def loadImages():
     """
@@ -105,6 +109,49 @@ def main():
                         move_finder_process.terminate()
                         ai_thinking = False
                     move_undone = True
+                    
+                if e.key == p.K_s:
+                    r = sr.Recognizer()
+                    r.dynamic_energy_threshold = False
+                    r.energy_threshold = 400
+
+                    with sr.Microphone() as source:
+                        r.adjust_for_ambient_noise(source)
+                        try:
+                            print("speak")
+                            audio = r.listen(source,phrase_time_limit=5)
+                            print("Recognizing...")
+                            query = r.recognize_google(audio, language='en-IN', show_all=False)
+                            print(f"User said: {query.lower()}\n")
+                            text = query.lower()
+
+                            col = files_to_cols[text[0]]
+                            row = ranks_to_rows[text[1]]
+
+                            if square_selected == (row, col) or col >= 8:  # user clicked the same square twice
+                                square_selected = ()  # deselect
+                                player_clicks = []  # clear clicks
+                            else:
+                                square_selected = (row, col)
+                                player_clicks.append(square_selected)  # append for both 1st and 2nd click
+                            if len(player_clicks) == 2 and human_turn:  # after 2nd click
+                                move = ChessEngine.Move(player_clicks[0], player_clicks[1], game_state.board)
+                                for i in range(len(valid_moves)):
+                                    if move == valid_moves[i]:
+                                        game_state.makeMove(valid_moves[i])
+                                        move_made = True
+                                        animate = True
+                                        square_selected = ()  # reset user clicks
+                                        player_clicks = []
+                                if not move_made:
+                                    player_clicks = [square_selected]
+                            
+                        except sr.UnknownValueError:
+                            print("UnknownValueError")
+                        except sr.RequestError:
+                            print("Resquest Error")
+                        except Exception:
+                            print("Some Exception")
 
         # AI move finder
         if not game_over and not human_turn and not move_undone:
