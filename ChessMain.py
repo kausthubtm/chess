@@ -10,7 +10,8 @@ from multiprocessing import Process, Queue
 import speech_recognition as sr
 import time
 
-BOARD_WIDTH = BOARD_HEIGHT = 512
+BOARD_WIDTH = 512
+BOARD_HEIGHT = 512
 MOVE_LOG_PANEL_WIDTH = 250
 MOVE_LOG_PANEL_HEIGHT = BOARD_HEIGHT
 DIMENSION = 8
@@ -18,8 +19,8 @@ SQUARE_SIZE = BOARD_HEIGHT // DIMENSION
 MAX_FPS = 15
 IMAGES = {}
 
-ranks_to_rows = {"1": 7, "2": 6, "3": 5, "4": 4, "5": 3, "6": 2, "7": 1, "8": 0}
-files_to_cols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7}
+ranks_to_rows = {"1": 7, "2": 6, "3": 5, "4": 4, "5": 3, "6": 2, "7": 1, "8": 0, "one": 7, "tu": 6, "too": 6, "to": 6}
+files_to_cols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7, "ji": 6, "me":4, "mi": 4}
 
 def loadImages():
     """
@@ -37,7 +38,10 @@ def main():
     This will handle user input and updating the graphics.
     """
     p.init()
-    screen = p.display.set_mode((BOARD_WIDTH + MOVE_LOG_PANEL_WIDTH, BOARD_HEIGHT))
+    piece_sound=p.mixer.Sound("/media/kausthub/DATA/NITK/6 sem/IT351/Project/Chess/Voice/piecehit.wav")
+    selectpiece_sound = p.mixer.Sound("/media/kausthub/DATA/NITK/6 sem/IT351/Project/Chess/Voice/selectpiece.wav")
+    destination_sound = p.mixer.Sound("/media/kausthub/DATA/NITK/6 sem/IT351/Project/Chess/Voice/destination.wav")
+    screen = p.display.set_mode((512, 512), p.RESIZABLE)
     clock = p.time.Clock()
     screen.fill(p.Color("white"))
     game_state = ChessEngine.GameState()
@@ -54,10 +58,19 @@ def main():
     move_finder_process = None
     move_log_font = p.font.SysFont("Arial", 14, False, False)
     player_one = True  # if a human is playing white, then this will be True, else False
-    player_two = False  # if a hyman is playing white, then this will be True, else False
+    player_two = False  # if a human is playing white, then this will be True, else False
+    multiplayer = False
+
 
     while running:
-        human_turn = (game_state.white_to_move and player_one) or (not game_state.white_to_move and player_two)
+        global BOARD_HEIGHT, BOARD_WIDTH, MOVE_LOG_PANEL_HEIGHT, MOVE_LOG_PANEL_WIDTH, SQUARE_SIZE, DIMENSION
+        BOARD_WIDTH, BOARD_HEIGHT = screen.get_size()
+        # print(BOARD_WIDTH, BOARD_HEIGHT)
+        MOVE_LOG_PANEL_WIDTH = 250
+        MOVE_LOG_PANEL_HEIGHT = BOARD_HEIGHT
+        DIMENSION = 8
+        SQUARE_SIZE = BOARD_HEIGHT // DIMENSION
+        human_turn = (game_state.white_to_move and player_one) or (not game_state.white_to_move and player_two) or multiplayer
         for e in p.event.get():
             if e.type == p.QUIT:
                 p.quit()
@@ -80,12 +93,13 @@ def main():
                             if move == valid_moves[i]:
                                 game_state.makeMove(valid_moves[i])
                                 move_made = True
+                                p.mixer.Sound.play(piece_sound)
                                 animate = True
                                 square_selected = ()  # reset user clicks
                                 player_clicks = []
                         if not move_made:
                             player_clicks = [square_selected]
-
+                            print("illegal move")
             # key handler
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:  # undo when 'z' is pressed
@@ -109,7 +123,7 @@ def main():
                         move_finder_process.terminate()
                         ai_thinking = False
                     move_undone = True
-                    
+
                 if e.key == p.K_s:
                     r = sr.Recognizer()
                     r.dynamic_energy_threshold = False
@@ -118,6 +132,11 @@ def main():
                     with sr.Microphone() as source:
                         r.adjust_for_ambient_noise(source)
                         try:
+                            if len(player_clicks) == 0:
+                                p.mixer.Sound.play(selectpiece_sound)
+                            # elif len(player_clicks) == 1:
+                                # p.mixer.Sound.play(destination_sound)
+                            # time.sleep(2)
                             print("speak")
                             audio = r.listen(source,phrase_time_limit=5)
                             print("Recognizing...")
@@ -125,8 +144,38 @@ def main():
                             print(f"User said: {query.lower()}\n")
                             text = query.lower()
 
-                            col = files_to_cols[text[0]]
-                            row = ranks_to_rows[text[1]]
+                            if text == "reset":
+                                game_state = ChessEngine.GameState()
+                                valid_moves = game_state.getValidMoves()
+                                square_selected = ()
+                                player_clicks = []
+                                move_made = False
+                                animate = False
+                                game_over = False
+                                if ai_thinking:
+                                    move_finder_process.terminate()
+                                    ai_thinking = False
+                                move_undone = True
+                            
+                            elif text == "undo":
+                                game_state.undoMove()
+                                move_made = True
+                                animate = False
+                                game_over = False
+                                if ai_thinking:
+                                    move_finder_process.terminate()
+                                    ai_thinking = False
+                                move_undone = True
+
+                            elif len(text.split(" "))>=2:
+                                words = text.split(" ")
+                                print(words)
+                                row = ranks_to_rows[words[1]]
+                                col = files_to_cols[words[0]]
+                            else :
+                                row = ranks_to_rows[text[1]]
+                                col = files_to_cols[text[0]]
+                            
 
                             if square_selected == (row, col) or col >= 8:  # user clicked the same square twice
                                 square_selected = ()  # deselect
@@ -140,6 +189,7 @@ def main():
                                     if move == valid_moves[i]:
                                         game_state.makeMove(valid_moves[i])
                                         move_made = True
+                                        p.mixer.Sound.play(piece_sound)
                                         animate = True
                                         square_selected = ()  # reset user clicks
                                         player_clicks = []
@@ -152,6 +202,9 @@ def main():
                             print("Resquest Error")
                         except Exception:
                             print("Some Exception")
+
+                if e.key == p.K_m:
+                    multiplayer = True
 
         # AI move finder
         if not game_over and not human_turn and not move_undone:
@@ -177,22 +230,37 @@ def main():
             move_made = False
             animate = False
             move_undone = False
+            if multiplayer :
+                human_turn = True
 
         drawGameState(screen, game_state, valid_moves, square_selected)
 
-        if not game_over:
-            drawMoveLog(screen, game_state, move_log_font)
+        # if not game_over:
+        #     drawMoveLog(screen, game_state, move_log_font)
 
-        if game_state.checkmate:
-            game_over = True
-            if game_state.white_to_move:
-                drawEndGameText(screen, "Black wins by checkmate")
-            else:
-                drawEndGameText(screen, "White wins by checkmate")
+        # if game_state.checkmate:
+        #     game_over = True
+        #     if game_state.white_to_move:
+        #         drawEndGameText(screen, "Black wins by checkmate")
+        #     else:
+        #         drawEndGameText(screen, "White wins by checkmate")
 
-        elif game_state.stalemate:
-            game_over = True
-            drawEndGameText(screen, "Stalemate")
+        # elif game_state.stalemate:
+        #     game_over = True
+        #     drawEndGameText(screen, "Stalemate")
+
+        if game_state.checkmate or game_state.stalemate or game_over:
+            if game_state.checkmate or game_state.stalemate:
+                game_over = True
+            if game_state.checkmate:
+                if game_state.white_to_move:
+                    drawMoveLog(screen, game_state, move_log_font, "Black wins by checkmate")
+                else:
+                    drawMoveLog(screen, game_state, move_log_font, "Black wins by checkmate")
+            elif game_state.stalemate:
+                drawMoveLog(screen, game_state, move_log_font, "Stalemate")
+            elif game_over:
+                drawMoveLog(screen, game_state, move_log_font, " ")
 
         clock.tick(MAX_FPS)
         p.display.flip()
@@ -202,6 +270,7 @@ def drawGameState(screen, game_state, valid_moves, square_selected):
     """
     Responsible for all the graphics within current game state.
     """
+    loadImages()
     drawBoard(screen)  # draw squares on the board
     highlightSquares(screen, game_state, valid_moves, square_selected)
     drawPieces(screen, game_state.board)  # draw pieces on top of those squares
@@ -257,24 +326,62 @@ def drawPieces(screen, board):
                 screen.blit(IMAGES[piece], p.Rect(column * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
 
-def drawMoveLog(screen, game_state, font):
+# def drawMoveLog(screen, game_state, font):
+#     """
+#     Draws the move log.
+#     """
+#     move_log_rect = p.Rect(BOARD_WIDTH, 0, MOVE_LOG_PANEL_WIDTH, MOVE_LOG_PANEL_HEIGHT)
+#     p.draw.rect(screen, p.Color('black'), move_log_rect)
+#     move_log = game_state.move_log
+#     move_texts = []
+#     for i in range(0, len(move_log), 2):
+#         move_string = str(i // 2 + 1) + '. ' + str(move_log[i]) + " "
+#         if i + 1 < len(move_log):
+#             move_string += str(move_log[i + 1]) + "  "
+#         move_texts.append(move_string)
+
+#     moves_per_row = 3
+#     padding = 5
+#     line_spacing = 2
+#     text_y = padding
+#     for i in range(0, len(move_texts), moves_per_row):
+#         text = ""
+#         for j in range(moves_per_row):
+#             if i + j < len(move_texts):
+#                 text += move_texts[i + j]
+
+#         text_object = font.render(text, True, p.Color('white'))
+#         text_location = move_log_rect.move(padding, text_y)
+#         screen.blit(text_object, text_location)
+#         text_y += text_object.get_height() + line_spacing
+
+def drawMoveLog(screen, game_state, font, str_):
     """
     Draws the move log.
     """
-    move_log_rect = p.Rect(BOARD_WIDTH, 0, MOVE_LOG_PANEL_WIDTH, MOVE_LOG_PANEL_HEIGHT)
+    move_log_rect = p.Rect(0, 0, BOARD_WIDTH, MOVE_LOG_PANEL_HEIGHT)
     p.draw.rect(screen, p.Color('black'), move_log_rect)
+
+    font = p.font.SysFont("Helvetica", 20, True, False)
+    text_object = font.render(str_, False, p.Color("white"))
+    text_location = p.Rect(0, 0, BOARD_WIDTH, BOARD_HEIGHT).move(text_object.get_width() / 2,text_object.get_height() / 2)
+    screen.blit(text_object, text_location)
+    text_object = font.render(str_, False, p.Color('white'))
+    # screen.blit(text_object, text_location.move(2, 2))
+
     move_log = game_state.move_log
+
     move_texts = []
     for i in range(0, len(move_log), 2):
         move_string = str(i // 2 + 1) + '. ' + str(move_log[i]) + " "
         if i + 1 < len(move_log):
             move_string += str(move_log[i + 1]) + "  "
         move_texts.append(move_string)
-
-    moves_per_row = 3
-    padding = 5
-    line_spacing = 2
-    text_y = padding
+    
+    moves_per_row = 2
+    padding = 10
+    line_spacing = 5
+    text_y = padding + 70
     for i in range(0, len(move_texts), moves_per_row):
         text = ""
         for j in range(moves_per_row):
@@ -285,7 +392,6 @@ def drawMoveLog(screen, game_state, font):
         text_location = move_log_rect.move(padding, text_y)
         screen.blit(text_object, text_location)
         text_y += text_object.get_height() + line_spacing
-
 
 def drawEndGameText(screen, text):
     font = p.font.SysFont("Helvetica", 32, True, False)
